@@ -53,14 +53,16 @@ class PlanetDataset(NonGeoDataset,Dataset):
         self.bands=bands
         self.transform = transform
         self.target_transform = target_transform
-
-
+        # Map that converts image names to indexes in the dataset
+        self.id2index = { int(image_id[:-4]) : i for i, image_id in enumerate(self.folder_data)}
 
     def __getitem__(self, index):
         sample_path = os.path.join(self.image_path,self.folder_data[index])
         mask_path = os.path.join(self.mask_path,self.folder_mask[index])
 
         sample = torch.from_numpy(self.custom_loader(path=sample_path)[:, :, self.bands])
+        sample = torch.permute(sample,(2,0,1))
+
         mask = torch.from_numpy(self.custom_loader(mask_path))
 
         if self.transform is not None:
@@ -76,7 +78,9 @@ class PlanetDataset(NonGeoDataset,Dataset):
         return len(self.folder_data)
     
     def custom_loader(self,path):  
-        return imread(path).astype(np.int16) 
+        return imread(path).astype(np.float32) 
+    
+
         
     def __str__(self):
         
