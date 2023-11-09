@@ -136,7 +136,13 @@ class CustomDataLoader:
             yield sample_batch, mask_batch
 
 
-def create_dataloaders(data_dir: str, batch_size: int, bands: list = [0, 1, 2, 3]):
+def create_dataloaders(
+    data_dir: str,
+    batch_size: int,
+    bands: list = [0, 1, 2, 3],
+    batch_transforms: bool = None,
+    num_workers: int = 0,
+):
     """Function to create individual dataloaders for test, train and val subset, including data augmentations"""
     # Create base datasets
     dataset = PlanetBaseDataset(data_dir, bands)
@@ -164,12 +170,14 @@ def create_dataloaders(data_dir: str, batch_size: int, bands: list = [0, 1, 2, 3
         ),  # Note that the randomblur is applied to the image but no the mask!
         # K.RandomGrayscale(p=0.2), # only works when we have 3 input channels
         K.Normalize(mean=means, std=stds),
+        same_on_batch=batch_transforms,
         data_keys=["image", "mask"],
     )
 
     test_transforms = K.container.AugmentationSequential(
         K.Resize((224, 224)),
         K.Normalize(mean=means, std=stds),
+        same_on_batch=batch_transforms,
         data_keys=["image", "mask"],
     )
 
@@ -186,7 +194,7 @@ def create_dataloaders(data_dir: str, batch_size: int, bands: list = [0, 1, 2, 3
         shuffle=False,
         sampler=None,
         batch_sampler=None,
-        num_workers=0,
+        num_workers=num_workers,
     )
     val_dataloader = CustomDataLoader(
         val_dataset,
@@ -195,7 +203,7 @@ def create_dataloaders(data_dir: str, batch_size: int, bands: list = [0, 1, 2, 3
         shuffle=False,
         sampler=None,
         batch_sampler=None,
-        num_workers=0,
+        num_workers=num_workers,
     )
     test_dataloader = CustomDataLoader(
         test_dataset,
@@ -204,7 +212,7 @@ def create_dataloaders(data_dir: str, batch_size: int, bands: list = [0, 1, 2, 3
         shuffle=False,
         sampler=None,
         batch_sampler=None,
-        num_workers=0,
+        num_workers=num_workers,
     )
 
     return train_dataloader, val_dataloader, test_dataloader
@@ -235,6 +243,10 @@ class PlanetDataset(Dataset):
         self.bands = bands
         self.transform = transform
         self.target_transform = target_transform
+        # Map that converts image names to indexes in the dataset
+        self.id2index = {
+            int(image_id[:-4]): i for i, image_id in enumerate(self.folder_data)
+        }
 
     def __getitem__(self, index):
         sample_path = os.path.join(self.image_path, self.folder_data[index])
@@ -243,6 +255,8 @@ class PlanetDataset(Dataset):
         sample = torch.from_numpy(
             self.custom_loader(path=sample_path)[:, :, self.bands]
         )
+        sample = torch.permute(sample, (2, 0, 1))
+
         mask = torch.from_numpy(self.custom_loader(mask_path))
 
         if self.transform is not None:
@@ -257,7 +271,7 @@ class PlanetDataset(Dataset):
         return len(self.folder_data)
 
     def custom_loader(self, path):
-        return imread(path).astype(np.int16)
+        return imread(path).astype(np.float32)
 
     def __str__(self):
         return f"PlanetDataset(root={self.root}, num_samples={len(self)}, transform={self.transform}, target_transform={self.target_transform})"
