@@ -20,8 +20,8 @@ def evaluate(model, device, val_loader, criterion):
     model.eval()
     test_loss = 0
     correct = 0
-    target_tot = []
-    pred_tot = []
+    all_labels = []
+    all_predictions = []
     for data, target in val_loader:
         data, target = data.to(device), target.to(device)
         output = model(data)
@@ -30,20 +30,20 @@ def evaluate(model, device, val_loader, criterion):
         )  # Assuming this is a pixel-wise classification
 
         correct += pred.eq(target.view_as(pred)).sum().item()
-        target_tot.extend(target.view(-1).cpu().numpy())
-        pred_tot.extend(pred.view(-1).cpu().numpy())
+        all_labels.extend(target.view(-1).cpu().numpy())
+        all_predictions.extend(pred.view(-1).cpu().numpy())
         test_loss += criterion(output, target).item() * len(data)
 
     test_loss /= len(val_loader.dataset)
 
     # Calculate Metrics
-    i = np.logical_and(target_tot, pred_tot)
-    u = np.logical_or(target_tot, pred_tot)
-    iou = i.sum()/u.sum()
-    dice = 2.0 * i.sum() / (target_tot.sum() + pred_tot.sum())
-    precision = precision_score(target_tot, pred_tot, average='macro')
-    recall = recall_score(target_tot, pred_tot, average='macro')
-    f1 = f1_score(target_tot, pred_tot, average='macro')
+    intersection = np.logical_and(all_labels, all_predictions)
+    union = np.logical_or(all_labels, all_predictions)
+    iou = intersection.sum()/union.sum()
+    dice = 2.0 * intersection.sum() / (all_labels.sum() + all_predictions.sum())
+    precision = precision_score(all_labels, all_predictions, average='macro')
+    recall = recall_score(all_labels, all_predictions, average='macro')
+    f1 = f1_score(all_labels, all_predictions, average='macro')
     accuracy = 100.0 * correct / len(val_loader.dataset)
 
     return test_loss, accuracy, iou, dice, precision, recall, f1
