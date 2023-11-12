@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torchvision import datasets, transforms
+from tqdm import tqdm
 
 # TODO: check out other functions from the IPEO deep learning exercises (semantic segmentation and convnets), they might be useful too
 
@@ -35,22 +36,24 @@ def train_epoch(model, device, train_loader, optimizer, epoch, criterion):
 
     loss_history = []
     accuracy_history = []
+    loss= 0
+    progress_bar = tqdm(total=len(train_loader.torch_loader), desc=f"Loss: {loss:.5f}")
     for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device=device), target.to(device=device)
-
+        data, target = data.to(device=device), target.to(device=device).squeeze().type(torch.LongTensor) #TODO target should be (#batchsize, H, W) for CELoss
         output = model.forward(data)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-
+        progress_bar.set_description(f"Loss: {loss.item():.5f}")
+        progress_bar.update(1)  # Manually update the progress bar
         pred = output.argmax(dim=1, keepdim=True)
         correct = pred.eq(target.view_as(pred)).sum().item()
 
         loss_history.append(loss.item())
         accuracy_history.append(correct / len(data))
 
-        if batch_idx % (len(train_loader.dataset) // len(data) // 10) == 0:
+        if batch_idx % (len(train_loader.torch_loader.dataset) // len(data) // 10) == 0:
             print(
                 f"Train Epoch: {epoch}-{batch_idx} batch_loss={loss.item()/len(data):0.2e} batch_acc={correct/len(data):0.3f}"
             )
