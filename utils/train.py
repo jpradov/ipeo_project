@@ -39,7 +39,7 @@ def train_epoch(model, device, train_loader, optimizer, epoch, criterion):
     loss= 0
     progress_bar = tqdm(total=len(train_loader.torch_loader), desc=f"Loss: {loss:.5f}")
     for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device=device), target.to(device=device).squeeze().type(torch.LongTensor) #TODO target should be (#batchsize, H, W) for CELoss
+        data, target = data.to(device=device), target.to(device=device) #TODO target should be (#batchsize, H, W) for CELoss
         output = model.forward(data)
         loss = criterion(output, target)
         loss.backward()
