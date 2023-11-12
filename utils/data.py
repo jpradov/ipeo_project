@@ -131,14 +131,15 @@ class CustomDataLoader:
         for sample_batch, mask_batch in self.torch_loader:
             # apply the transform
             mask_batch = mask_batch[:, None, :, :]
-            sample_batch, mask_batch = self.transforms(sample_batch, mask_batch)
+            sample_batch, mask_batch = self.transforms(
+                sample_batch, mask_batch)
             # yield current batch to the iterator
             yield sample_batch, mask_batch
 
 
 def create_dataloaders(
-    data_dir: str,
-    batch_size: int,
+    data_dir=config.PATH_TO_DATA,
+    batch_size=10,
     bands: list = [0, 1, 2, 3],
     batch_transforms: bool = None,
     num_workers: int = 0,
