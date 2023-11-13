@@ -44,6 +44,7 @@ def run_training(
         lr: float,
         batch_size: int,
         num_workers=2,
+        bands=[0, 1, 2, 3],
         device="cpu"
 ) -> TrainingResult:
     """`wandb.login()` must be called prior to training"""
@@ -60,7 +61,7 @@ def run_training(
     )
     # ===== Data Loading =====
     train_dl, val_dl, test_dl = create_dataloaders(
-        data_dir=data_dir, batch_size=batch_size, num_workers=num_workers)
+        data_dir=data_dir, batch_size=batch_size, bands=bands, num_workers=num_workers)
 
     # ===== Model, Optimizer and Criterion =====
     model = model.to(device=device)
