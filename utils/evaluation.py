@@ -33,7 +33,7 @@ def evaluate(model, device, val_loader, criterion):
         pred_tot.extend(pred.view(-1).cpu().numpy())
         test_loss += criterion(output, target).item() * len(data)
 
-    test_loss /= len(val_loader.dataset)
+    test_loss /= len(val_loader.torch_loader.dataset)
 
     # Calculate metrics using sklearn
     accuracy = accuracy_score(target_tot, pred_tot)   
