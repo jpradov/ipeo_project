@@ -15,7 +15,7 @@ import config
 # TODO: check out other functions from the IPEO deep learning exercises (semantic segmentation and convnets), they might be useful too
 
 
-def run_training(model: Module, num_epochs: int, lr: float, batch_size: int, num_workers=2, device="cpu"):
+def run_training(experiment_name: str, model: Module, num_epochs: int, lr: float, batch_size: int, num_workers=2, device="cpu") -> TrainingResult:
     # adapted from CS-433 Machine Learning Exercises
     # ===== Data Loading =====
     train_dl, val_dl, test_dl = create_dataloaders(
@@ -39,6 +39,7 @@ def run_training(model: Module, num_epochs: int, lr: float, batch_size: int, num
     f1_history = []
     for epoch in range(1, num_epochs + 1):
         train_loss, train_acc = _train_epoch(
+            experiment_name=experiment_name,
             model=model,
             device=device,
             train_loader=train_dl,
@@ -102,6 +103,18 @@ def run_training(model: Module, num_epochs: int, lr: float, batch_size: int, num
         plt.imshow(points[-k - 1][0].reshape(28, 28), cmap="gray")
         plt.title(f"true={int(points[-k-1][3])} pred={int(points[-k-1][2])}")
 
+    return TrainingResult(
+        train_loss_history=train_loss_history,
+        train_acc_history=train_acc_history,
+        val_loss_history=val_loss_history,
+        val_acc_history=val_acc_history,
+        iou_history=iou_history,
+        dice_history=dice_history,
+        precision_history=precision_history,
+        recall_history=recall_history,
+        f1_history=f1_history,
+    )
+
 
 def load_checkpoint(checkpoint_path: str, model: Module, optimizer: Module) -> tuple[int, float]:
     checkpoint = torch.load(checkpoint_path)
@@ -130,6 +143,7 @@ class _EarlyStopper:
 
 
 def _train_epoch(
+    experiment_name: str,
     model: Module,
     train_loader: DataLoader,
     optimizer: Optimizer,
@@ -159,7 +173,7 @@ def _train_epoch(
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "loss": loss
-            }, config.CHECKPOINT_PATH)
+            }, f"{config.CHECKPOINT_PATH}/{experiment_name}.pt")
 
     return loss_history, accuracy_history
 
@@ -203,3 +217,27 @@ def _get_predictions(model, device, val_loader, criterion, num=None):
             break
 
     return points
+
+
+class TrainingResult():
+    def __init__(
+        self,
+        train_loss_history: list[float],
+        train_acc_history: list[float],
+        val_loss_history: list[float],
+        val_acc_history: list[float],
+        iou_history: list[float],
+        dice_history: list[float],
+        precision_history: list[float],
+        recall_history: list[float],
+        f1_history: list[float]
+    ) -> None:
+        self.train_loss_history = train_loss_history
+        self.train_acc_history = train_acc_history
+        self.val_loss_history = val_loss_history
+        self.val_acc_history = val_acc_history
+        self.iou_history = iou_history
+        self.dice_history = dice_history
+        self.precision_history = precision_history
+        self.recall_history = recall_history
+        self.f1_history = f1_history
