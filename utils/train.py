@@ -6,20 +6,49 @@ import torch
 from torch.nn import Module
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
-from torchvision import datasets, transforms
 import tqdm
 from data import create_dataloaders
 from evaluation import evaluate
-import config
-
-# TODO: check out other functions from the IPEO deep learning exercises (semantic segmentation and convnets), they might be useful too
 
 
-def run_training(experiment_name: str, model: Module, num_epochs: int, lr: float, batch_size: int, num_workers=2, device="cpu") -> TrainingResult:
+class TrainingResult():
+    def __init__(
+        self,
+        train_loss_history: list[float],
+        train_acc_history: list[float],
+        val_loss_history: list[float],
+        val_acc_history: list[float],
+        iou_history: list[float],
+        dice_history: list[float],
+        precision_history: list[float],
+        recall_history: list[float],
+        f1_history: list[float]
+    ) -> None:
+        self.train_loss_history = train_loss_history
+        self.train_acc_history = train_acc_history
+        self.val_loss_history = val_loss_history
+        self.val_acc_history = val_acc_history
+        self.iou_history = iou_history
+        self.dice_history = dice_history
+        self.precision_history = precision_history
+        self.recall_history = recall_history
+        self.f1_history = f1_history
+
+
+def run_training(
+        experiment_name: str,
+        data_dir: str,
+        model: Module,
+        num_epochs: int,
+        lr: float,
+        batch_size: int,
+        num_workers=2,
+        device="cpu"
+) -> TrainingResult:
     # adapted from CS-433 Machine Learning Exercises
     # ===== Data Loading =====
     train_dl, val_dl, test_dl = create_dataloaders(
-        batch_size=batch_size, num_workers=num_workers)
+        data_dir=data_dir, batch_size=batch_size, num_workers=num_workers)
 
     # ===== Model, Optimizer and Criterion =====
     model = model.to(device=device)
@@ -163,7 +192,7 @@ def _train_epoch(
         loss_history.append(loss)
         accuracy_history.append(accuracy)
 
-        if batch_idx % (len(train_loader.dataset) // len(data) // 10) == 0:
+        if batch_idx % (len(train_loader.torch_loader.dataset) // len(data) // 10) == 0:
             pbar.update(10)
             print(
                 f"Train Epoch: {epoch}-{batch_idx} batch_loss={loss/len(data):0.2e} batch_acc={accuracy/len(data):0.3f}"
@@ -173,7 +202,7 @@ def _train_epoch(
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "loss": loss
-            }, f"{config.CHECKPOINT_PATH}/{experiment_name}.pt")
+            }, f"{experiment_name}.pt")
 
     return loss_history, accuracy_history
 
@@ -187,10 +216,10 @@ def _train_batch(data, target, model: Module, optimizer: Optimizer, criterion, d
     optimizer.step()
     optimizer.zero_grad()
 
-    predictions = output.argmax(1).cpu().detatch().numpy()
-    ground_truth = target.cpu().detatch().numpy()
+    predictions = output.argmax(1).cpu().detach().numpy()
+    ground_truth = target.cpu().detach().numpy()
 
-    loss = loss.item().cpu().detatch().numpy()
+    loss = loss.cpu().detach().numpy()
     accuracy = (predictions == ground_truth).mean()
 
     return loss, accuracy
@@ -217,27 +246,3 @@ def _get_predictions(model, device, val_loader, criterion, num=None):
             break
 
     return points
-
-
-class TrainingResult():
-    def __init__(
-        self,
-        train_loss_history: list[float],
-        train_acc_history: list[float],
-        val_loss_history: list[float],
-        val_acc_history: list[float],
-        iou_history: list[float],
-        dice_history: list[float],
-        precision_history: list[float],
-        recall_history: list[float],
-        f1_history: list[float]
-    ) -> None:
-        self.train_loss_history = train_loss_history
-        self.train_acc_history = train_acc_history
-        self.val_loss_history = val_loss_history
-        self.val_acc_history = val_acc_history
-        self.iou_history = iou_history
-        self.dice_history = dice_history
-        self.precision_history = precision_history
-        self.recall_history = recall_history
-        self.f1_history = f1_history
