@@ -20,7 +20,6 @@ class TrainingResult():
         val_loss_history: list[float],
         val_acc_history: list[float],
         iou_history: list[float],
-        dice_history: list[float],
         precision_history: list[float],
         recall_history: list[float],
         f1_history: list[float]
@@ -30,7 +29,6 @@ class TrainingResult():
         self.val_loss_history = val_loss_history
         self.val_acc_history = val_acc_history
         self.iou_history = iou_history
-        self.dice_history = dice_history
         self.precision_history = precision_history
         self.recall_history = recall_history
         self.f1_history = f1_history
@@ -75,7 +73,6 @@ def run_training(
     val_loss_history = []
     val_acc_history = []
     iou_history = []
-    dice_history = []
     precision_history = []
     recall_history = []
     f1_history = []
@@ -92,7 +89,7 @@ def run_training(
         train_loss_history.extend(train_loss)
         train_acc_history.extend(train_acc)
 
-        val_loss, val_acc, iou, dice, precision, recall, f1 = evaluate(
+        val_loss, val_acc, iou, precision, recall, f1 = evaluate(
             model=model,
             device=device,
             val_loader=val_dl,
@@ -104,7 +101,6 @@ def run_training(
             "validation_loss": val_loss,
             "validation_accuracy": val_acc,
             "iou": iou,
-            "dice": dice,
             "precision": precision,
             "recall": recall,
             "f1": f1
@@ -112,7 +108,6 @@ def run_training(
         val_loss_history.append(val_loss)
         val_acc_history.append(val_acc)
         iou_history.append(iou)
-        dice_history.append(dice)
         precision_history.append(precision)
         recall_history.append(recall)
         f1_history.append(f1)
@@ -162,7 +157,6 @@ def run_training(
         val_loss_history=val_loss_history,
         val_acc_history=val_acc_history,
         iou_history=iou_history,
-        dice_history=dice_history,
         precision_history=precision_history,
         recall_history=recall_history,
         f1_history=f1_history,
