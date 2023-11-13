@@ -7,8 +7,10 @@ from torch.nn import Module
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
 from torchvision import datasets, transforms
+import tqdm
 from data import create_dataloaders
 from evaluation import evaluate
+import config
 
 # TODO: check out other functions from the IPEO deep learning exercises (semantic segmentation and convnets), they might be useful too
 
@@ -101,6 +103,13 @@ def run_training(model: Module, num_epochs: int, lr: float, batch_size: int, num
         plt.title(f"true={int(points[-k-1][3])} pred={int(points[-k-1][2])}")
 
 
+def load_checkpoint(checkpoint_path: str, model: Module, optimizer: Module) -> tuple[int, float]:
+    checkpoint = torch.load(checkpoint_path)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["checkpoint_state_dict"])
+    return checkpoint["epoch"], checkpoint["loss"]
+
+
 class _EarlyStopper:
     # from https://stackoverflow.com/questions/71998978/early-stopping-in-pytorch
     def __init__(self, patience=1, min_delta=0):
@@ -132,6 +141,7 @@ def _train_epoch(
     model.train()
     loss_history = []
     accuracy_history = []
+    pbar = tqdm(total=100)
     for batch_idx, (data, target) in enumerate(train_loader):
         loss, accuracy = _train_batch(data=data, target=target, model=model, optimizer=optimizer,
                                       criterion=criterion, device=device)
@@ -140,9 +150,16 @@ def _train_epoch(
         accuracy_history.append(accuracy)
 
         if batch_idx % (len(train_loader.dataset) // len(data) // 10) == 0:
+            pbar.update(10)
             print(
                 f"Train Epoch: {epoch}-{batch_idx} batch_loss={loss/len(data):0.2e} batch_acc={accuracy/len(data):0.3f}"
             )
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": loss
+            }, config.CHECKPOINT_PATH)
 
     return loss_history, accuracy_history
 
