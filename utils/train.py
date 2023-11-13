@@ -50,7 +50,7 @@ def run_training(
     # adapted from CS-433 Machine Learning Exercises
     # ===== Weights & Biases setup =====
     wandb.init(
-        entity=experiment_name,
+        entity="ipeo_project",
         project="ipeo_project",
         config={
             "learning_rate": lr,

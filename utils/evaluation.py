@@ -12,7 +12,7 @@ import config
 
 import numpy as np
 import torch
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, jaccard_score, precision_score, recall_score, f1_score
 
 @torch.no_grad()
 def evaluate(model, device, val_loader, criterion):
@@ -29,21 +29,17 @@ def evaluate(model, device, val_loader, criterion):
             dim=1, keepdim=True
         )  # Assuming this is a pixel-wise classification
 
-        correct += pred.eq(target.view_as(pred)).sum().item()
         target_tot.extend(target.view(-1).cpu().numpy())
         pred_tot.extend(pred.view(-1).cpu().numpy())
         test_loss += criterion(output, target).item() * len(data)
 
     test_loss /= len(val_loader.dataset)
 
-    # Calculate Metrics
-    intersection = np.logical_and(target_tot, pred_tot)
-    union = np.logical_or(target_tot, pred_tot)
-    iou = intersection.sum()/union.sum()
-    dice = 2.0 * intersection.sum() / (target_tot.sum() + pred_tot.sum())
+    # Calculate metrics using sklearn
+    accuracy = accuracy_score(target_tot, pred_tot)   
+    jaccard = jaccard_score(target_tot, pred_tot, average='macro') # equivalent to IOU
     precision = precision_score(target_tot, pred_tot, average='macro')
     recall = recall_score(target_tot, pred_tot, average='macro')
-    f1 = f1_score(target_tot, pred_tot, average='macro')
-    accuracy = 100.0 * correct / len(val_loader.dataset)
+    f1 = f1_score(target_tot, pred_tot, average='macro') # equivalent to Dice index
 
-    return test_loss, accuracy, iou, dice, precision, recall, f1
+    return test_loss, accuracy, jaccard, precision, recall, f1
