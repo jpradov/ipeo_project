@@ -3,117 +3,122 @@ from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torchvision import datasets, transforms
-from tqdm import tqdm
-
-# TODO: check out other functions from the IPEO deep learning exercises (semantic segmentation and convnets), they might be useful too
-
-
-class EarlyStopper:
-    # from https://stackoverflow.com/questions/71998978/early-stopping-in-pytorch
-    def __init__(self, patience=1, min_delta=0):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.min_validation_loss = float("inf")
-
-    def early_stop(self, validation_loss):
-        if validation_loss < self.min_validation_loss:
-            self.min_validation_loss = validation_loss
-            self.counter = 0
-        elif validation_loss > (self.min_validation_loss + self.min_delta):
-            self.counter += 1
-            if self.counter >= self.patience:
-                return True
-        return False
+from torch.nn import Module
+from torch.utils.data import DataLoader
+from torch.optim import Optimizer
+import tqdm
+from data import create_dataloaders
+from evaluation import evaluate
+import wandb
 
 
-def train_epoch(model, device, train_loader, optimizer, epoch, criterion):
-    # adapted from CS-433 Machine Learning Exercises
-    # Example training function for an epoch
-
-    model.train()  # Important set model to train mode (affects dropout, batch norm etc)
-
-    loss_history = []
-    accuracy_history = []
-    loss= 0
-    progress_bar = tqdm(total=len(train_loader.torch_loader), desc=f"Loss: {loss:.5f}")
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device=device), target.to(device=device) #TODO target should be (#batchsize, H, W) for CELoss
-        output = model.forward(data)
-        loss = criterion(output, target)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-        progress_bar.set_description(f"Loss: {loss.item():.5f}")
-        progress_bar.update(1)  # Manually update the progress bar
-        pred = output.argmax(dim=1, keepdim=True)
-        correct = pred.eq(target.view_as(pred)).sum().item()
-
-        loss_history.append(loss.item())
-        accuracy_history.append(correct / len(data))
-
-        if batch_idx % (len(train_loader.torch_loader.dataset) // len(data) // 10) == 0:
-            print(
-                f"Train Epoch: {epoch}-{batch_idx} batch_loss={loss.item()/len(data):0.2e} batch_acc={correct/len(data):0.3f}"
-            )
-
-    return loss_history, accuracy_history
+class TrainingResult():
+    def __init__(
+        self,
+        train_loss_history: list[float],
+        train_acc_history: list[float],
+        val_loss_history: list[float],
+        val_acc_history: list[float],
+        iou_history: list[float],
+        dice_history: list[float],
+        precision_history: list[float],
+        recall_history: list[float],
+        f1_history: list[float]
+    ) -> None:
+        self.train_loss_history = train_loss_history
+        self.train_acc_history = train_acc_history
+        self.val_loss_history = val_loss_history
+        self.val_acc_history = val_acc_history
+        self.iou_history = iou_history
+        self.dice_history = dice_history
+        self.precision_history = precision_history
+        self.recall_history = recall_history
+        self.f1_history = f1_history
 
 
-def run_mnist_training(model, num_epochs, lr, batch_size, device="cpu"):
-    # adapted from CS-433 Machine Learning Exercises
-    """Example training function, to be adapted."""
-    # TODO: adapt to our data
-
-    # ===== Data Loading =====
-    # The input images should be normalized to have zero mean, unit variance
-    # We could also add data augmentation here if we wanted
-    transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-    )
-    train_set = datasets.MNIST("./data", train=True, download=True, transform=transform)
-
-    # Here we use the official test set as a validation set
-    # This is not a good practice (but quite common since it is easier to setup)
-    val_set = datasets.MNIST("./data", train=False, transform=transform)
-
-    # The dataloaders can run in separate threads and handle the actual data
-    # reading, augmenting and forming mini-batches
-    train_loader = torch.utils.data.DataLoader(
-        train_set,
-        batch_size=batch_size,
-        shuffle=True,  # Can be important for training
-        pin_memory=torch.cuda.is_available(),
-        drop_last=True,
+def run_training(
+        experiment_name: str,
+        data_dir: str,
+        model: Module,
+        num_epochs: int,
+        lr: float,
+        batch_size: int,
         num_workers=2,
+        device="cpu"
+) -> TrainingResult:
+    """`wandb.login()` must be called prior to training"""
+    # adapted from CS-433 Machine Learning Exercises
+    # ===== Weights & Biases setup =====
+    wandb.init(
+        entity="ipeo_project",
+        project="ipeo_project",
+        config={
+            "learning_rate": lr,
+            "batch_size": batch_size,
+            "num_epochs": num_epochs
+        }
     )
-    val_loader = torch.utils.data.DataLoader(
-        val_set,
-        batch_size=batch_size,
-    )
+    # ===== Data Loading =====
+    train_dl, val_dl, test_dl = create_dataloaders(
+        data_dir=data_dir, batch_size=batch_size, num_workers=num_workers)
 
     # ===== Model, Optimizer and Criterion =====
-    model = None  # OUr Model
     model = model.to(device=device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.functional.cross_entropy
 
     # ===== Train Model =====
+    early_stopper = _EarlyStopper()
     train_loss_history = []
     train_acc_history = []
     val_loss_history = []
     val_acc_history = []
+    iou_history = []
+    dice_history = []
+    precision_history = []
+    recall_history = []
+    f1_history = []
     for epoch in range(1, num_epochs + 1):
-        train_loss, train_acc = train_epoch(
-            model, device, train_loader, optimizer, epoch, criterion
+        train_loss, train_acc = _train_epoch(
+            experiment_name=experiment_name,
+            model=model,
+            device=device,
+            train_loader=train_dl,
+            optimizer=optimizer,
+            epoch=epoch,
+            criterion=criterion
         )
         train_loss_history.extend(train_loss)
         train_acc_history.extend(train_acc)
 
-        val_loss, val_acc = validate(model, device, val_loader, criterion)
+        val_loss, val_acc, iou, dice, precision, recall, f1 = evaluate(
+            model=model,
+            device=device,
+            val_loader=val_dl,
+            criterion=criterion
+        )
+        wandb.log({
+            "training_loss": train_loss,
+            "training_accuracy": train_acc,
+            "validation_loss": val_loss,
+            "validation_accuracy": val_acc,
+            "iou": iou,
+            "dice": dice,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1
+        })
         val_loss_history.append(val_loss)
         val_acc_history.append(val_acc)
+        iou_history.append(iou)
+        dice_history.append(dice)
+        precision_history.append(precision)
+        recall_history.append(recall)
+        f1_history.append(f1)
+        if early_stopper.early_stop(val_loss):
+            break
+
+    # TODO - plot all validation data
 
     # ===== Plot training curves =====
     n_train = len(train_acc_history)
@@ -134,11 +139,11 @@ def run_mnist_training(model, num_epochs, lr, batch_size, device="cpu"):
     plt.ylabel("Loss")
 
     # ===== Plot low/high loss predictions on validation set =====
-    points = get_predictions(
-        model,
-        device,
-        val_loader,
-        partial(torch.nn.functional.cross_entropy, reduction="none"),
+    points = _get_predictions(
+        model=model,
+        device=device,
+        val_loader=val_dl,
+        criterion=partial(torch.nn.functional.cross_entropy, reduction="none"),
     )
     points.sort(key=lambda x: x[1])
     plt.figure(figsize=(15, 6))
@@ -150,37 +155,106 @@ def run_mnist_training(model, num_epochs, lr, batch_size, device="cpu"):
         plt.imshow(points[-k - 1][0].reshape(28, 28), cmap="gray")
         plt.title(f"true={int(points[-k-1][3])} pred={int(points[-k-1][2])}")
 
-
-@torch.no_grad()
-def validate(model, device, val_loader, criterion):
-    # adapted from CS-433 Machine Learning Exercises
-    model.eval()  # Important set model to eval mode (affects dropout, batch norm etc)
-    test_loss = 0
-    correct = 0
-    for data, target in val_loader:
-        data, target = data.to(device), target.to(device)
-        output = model(data)
-        test_loss += criterion(output, target).item() * len(data)
-        pred = output.argmax(
-            dim=1, keepdim=True
-        )  # get the index of the max log-probability
-        correct += pred.eq(target.view_as(pred)).sum().item()
-
-    test_loss /= len(val_loader.dataset)
-
-    print(
-        "Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)".format(
-            test_loss,
-            correct,
-            len(val_loader.dataset),
-            100.0 * correct / len(val_loader.dataset),
-        )
+    return TrainingResult(
+        train_loss_history=train_loss_history,
+        train_acc_history=train_acc_history,
+        val_loss_history=val_loss_history,
+        val_acc_history=val_acc_history,
+        iou_history=iou_history,
+        dice_history=dice_history,
+        precision_history=precision_history,
+        recall_history=recall_history,
+        f1_history=f1_history,
     )
-    return test_loss, correct / len(val_loader.dataset)
+
+
+def load_checkpoint(checkpoint_path: str, model: Module, optimizer: Module) -> tuple[int, float]:
+    checkpoint = torch.load(checkpoint_path)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["checkpoint_state_dict"])
+    return checkpoint["epoch"], checkpoint["loss"]
+
+
+class _EarlyStopper:
+    # from https://stackoverflow.com/questions/71998978/early-stopping-in-pytorch
+    def __init__(self, patience=1, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = float("inf")
+
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+
+
+def _train_epoch(
+    experiment_name: str,
+    model: Module,
+    train_loader: DataLoader,
+    optimizer: Optimizer,
+    epoch: int,
+    criterion,
+    device="cpu"
+) -> tuple[list[float], list[float]]:
+    # adapted from CS-433 Machine Learning Exercises
+    model.train()
+    loss_history = []
+    accuracy_history = []
+    pbar = tqdm(total=100)
+    for batch_idx, (data, target) in enumerate(train_loader):
+        loss, accuracy = _train_batch(data=data, target=target, model=model, optimizer=optimizer,
+                                      criterion=criterion, device=device)
+
+        loss_history.append(loss)
+        accuracy_history.append(accuracy)
+
+        wandb.log({
+            "loss": loss,
+            "accuracy": accuracy,
+        })
+
+        if batch_idx % (len(train_loader.torch_loader.dataset) // len(data) // 10) == 0:
+            pbar.update(10)
+            print(
+                f"Train Epoch: {epoch}-{batch_idx} batch_loss={loss/len(data):0.2e} batch_acc={accuracy/len(data):0.3f}"
+            )
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": loss
+            }, f"{experiment_name}.pt")
+
+    return loss_history, accuracy_history
+
+
+def _train_batch(data, target, model: Module, optimizer: Optimizer, criterion, device="cpu") -> tuple[float, float]:
+    data, target = data.to(device=device), target.to(device=device)
+
+    output = model.forward(data)
+    loss = criterion(output, target)
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+    predictions = output.argmax(1).cpu().detach().numpy()
+    ground_truth = target.cpu().detach().numpy()
+
+    loss = loss.cpu().detach().numpy()
+    accuracy = (predictions == ground_truth).mean()
+
+    return loss, accuracy
 
 
 @torch.no_grad()
-def get_predictions(model, device, val_loader, criterion, num=None):
+def _get_predictions(model, device, val_loader, criterion, num=None):
     # adapted from CS-433 Machine Learning Exercises
     model.eval()
     points = []
