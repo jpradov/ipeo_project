@@ -6,7 +6,7 @@ import torch
 from torch.nn import Module
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
-import tqdm
+from tqdm import tqdm
 from data import create_dataloaders
 from evaluation import evaluate
 import wandb
