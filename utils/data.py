@@ -134,7 +134,7 @@ class CustomDataLoader:
             sample_batch, mask_batch = self.transforms(
                 sample_batch, mask_batch)
             # yield current batch to the iterator
-            yield sample_batch, mask_batch
+            yield sample_batch, mask_batch.squeeze().type(torch.LongTensor) #BCELoss requires size to be (batch, H, W) and dtype LongTensor
 
 
 def create_dataloaders(
