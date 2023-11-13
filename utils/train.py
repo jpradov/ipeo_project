@@ -9,6 +9,7 @@ from torch.optim import Optimizer
 import tqdm
 from data import create_dataloaders
 from evaluation import evaluate
+import wandb
 
 
 class TrainingResult():
@@ -45,7 +46,18 @@ def run_training(
         num_workers=2,
         device="cpu"
 ) -> TrainingResult:
+    """`wandb.login()` must be called prior to training"""
     # adapted from CS-433 Machine Learning Exercises
+    # ===== Weights & Biases setup =====
+    wandb.init(
+        entity=experiment_name,
+        project="ipeo_project",
+        config={
+            "learning_rate": lr,
+            "batch_size": batch_size,
+            "num_epochs": num_epochs
+        }
+    )
     # ===== Data Loading =====
     train_dl, val_dl, test_dl = create_dataloaders(
         data_dir=data_dir, batch_size=batch_size, num_workers=num_workers)
@@ -85,6 +97,17 @@ def run_training(
             val_loader=val_dl,
             criterion=criterion
         )
+        wandb.log({
+            "training_loss": train_loss,
+            "training_accuracy": train_acc,
+            "validation_loss": val_loss,
+            "validation_accuracy": val_acc,
+            "iou": iou,
+            "dice": dice,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1
+        })
         val_loss_history.append(val_loss)
         val_acc_history.append(val_acc)
         iou_history.append(iou)
@@ -191,6 +214,11 @@ def _train_epoch(
 
         loss_history.append(loss)
         accuracy_history.append(accuracy)
+
+        wandb.log({
+            "loss": loss,
+            "accuracy": accuracy,
+        })
 
         if batch_idx % (len(train_loader.torch_loader.dataset) // len(data) // 10) == 0:
             pbar.update(10)
