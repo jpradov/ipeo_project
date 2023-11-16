@@ -128,12 +128,16 @@ class CustomDataLoader:
         self,
     ):
         # get the batches of the original loader
+        
         for sample_batch, mask_batch in self.torch_loader:
-            # apply the transform
-            mask_batch = mask_batch[:, None, :, :]
-            sample_batch, mask_batch = self.transforms(
-                sample_batch, mask_batch)
-            # yield current batch to the iterator
+            
+            # check if transforms is enabled
+            if self.transforms is not None:
+                # apply the transform
+                mask_batch = mask_batch[:, None, :, :]
+                sample_batch, mask_batch = self.transforms(
+                    sample_batch, mask_batch)
+                # yield current batch to the iterator
             yield sample_batch, mask_batch.squeeze().type(torch.LongTensor) #BCELoss requires size to be (batch, H, W) and dtype LongTensor
 
 
@@ -143,6 +147,7 @@ def create_dataloaders(
     bands: list = [0, 1, 2, 3],
     batch_transforms: bool = None,
     num_workers: int = 0,
+    transforms=True,
 ):
     """Function to create individual dataloaders for test, train and val subset, including data augmentations"""
     # Create base datasets
@@ -182,6 +187,10 @@ def create_dataloaders(
         data_keys=["image", "mask"],
     )
 
+    if not transforms:
+        train_transforms = None
+        test_transforms = None
+
     # create data subsets
     train_dataset = Subset(dataset, train_indices)
     val_dataset = Subset(dataset, val_indices)
@@ -215,6 +224,7 @@ def create_dataloaders(
         batch_sampler=None,
         num_workers=num_workers,
     )
+
 
     return train_dataloader, val_dataloader, test_dataloader
 
