@@ -43,14 +43,19 @@ def run_training(
         batch_size: int,
         num_workers=2,
         bands=[0, 1, 2, 3],
-        device="cpu"
+        device="cpu",
+        optimizer=None,
+        scheduler=None,
+        project_name=None,
+        visualization=False
 ) -> TrainingResult:
     """`wandb.login()` must be called prior to training"""
     # adapted from CS-433 Machine Learning Exercises
     # ===== Weights & Biases setup =====
     wandb.init(
+        name=experiment_name,
         entity="ipeo_project",
-        project="ipeo_project",
+        project=project_name,
         config={
             "learning_rate": lr,
             "batch_size": batch_size,
@@ -63,11 +68,12 @@ def run_training(
 
     # ===== Model, Optimizer and Criterion =====
     model = model.to(device=device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    if optimizer == None:
+      optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.functional.cross_entropy
 
     # ===== Train Model =====
-    early_stopper = _EarlyStopper()
+    early_stopper = _EarlyStopper(patience=num_epochs)
     train_loss_history = []
     train_acc_history = []
     val_loss_history = []
@@ -83,12 +89,13 @@ def run_training(
             device=device,
             train_loader=train_dl,
             optimizer=optimizer,
+            scheduler=scheduler,
             epoch=epoch,
             criterion=criterion
         )
         train_loss_history.extend(train_loss)
         train_acc_history.extend(train_acc)
-
+        current_lr = optimizer.param_groups[0]['lr']
         val_loss, val_acc, iou, precision, recall, f1 = evaluate(
             model=model,
             device=device,
@@ -96,14 +103,13 @@ def run_training(
             criterion=criterion
         )
         wandb.log({
-            "training_loss": train_loss,
-            "training_accuracy": train_acc,
             "validation_loss": val_loss,
             "validation_accuracy": val_acc,
             "iou": iou,
             "precision": precision,
             "recall": recall,
-            "f1": f1
+            "f1": f1,
+            "learning rate" : current_lr
         })
         val_loss_history.append(val_loss)
         val_acc_history.append(val_acc)
@@ -111,15 +117,16 @@ def run_training(
         precision_history.append(precision)
         recall_history.append(recall)
         f1_history.append(f1)
-        if early_stopper.early_stop(val_loss):
+        if early_stopper.early_stop(val_acc):
+            print(f"Early stopped at epoch {epoch} with val loss {val_loss} and val accuracy {val_acc}.")
             break
 
     # TODO - plot all validation data
 
     # ===== Plot training curves =====
     n_train = len(train_acc_history)
-    t_train = num_epochs * np.arange(n_train) / n_train
-    t_val = np.arange(1, num_epochs + 1)
+    t_train = epoch * np.arange(n_train) / n_train
+    t_val = np.arange(1, epoch + 1) #not num_epoch+1 due to possible early stopping.
     plt.figure()
     plt.plot(t_train, train_acc_history, label="Train")
     plt.plot(t_val, val_acc_history, label="Val")
@@ -141,15 +148,16 @@ def run_training(
         val_loader=val_dl,
         criterion=partial(torch.nn.functional.cross_entropy, reduction="none"),
     )
-    points.sort(key=lambda x: x[1])
-    plt.figure(figsize=(15, 6))
-    for k in range(5):
-        plt.subplot(2, 5, k + 1)
-        plt.imshow(points[k][0].reshape(28, 28), cmap="gray")
-        plt.title(f"true={int(points[k][3])} pred={int(points[k][2])}")
-        plt.subplot(2, 5, 5 + k + 1)
-        plt.imshow(points[-k - 1][0].reshape(28, 28), cmap="gray")
-        plt.title(f"true={int(points[-k-1][3])} pred={int(points[-k-1][2])}")
+    if visualization:
+        points.sort(key=lambda x: x[1])
+        plt.figure(figsize=(15, 6))
+        for k in range(5):
+            plt.subplot(2, 5, k + 1)
+            plt.imshow(points[k][0].reshape(28, 28), cmap="gray")
+            plt.title(f"true={int(points[k][3])} pred={int(points[k][2])}")
+            plt.subplot(2, 5, 5 + k + 1)
+            plt.imshow(points[-k - 1][0].reshape(28, 28), cmap="gray")
+            plt.title(f"true={int(points[-k-1][3])} pred={int(points[-k-1][2])}")
 
     return TrainingResult(
         train_loss_history=train_loss_history,
@@ -194,6 +202,7 @@ def _train_epoch(
     model: Module,
     train_loader: DataLoader,
     optimizer: Optimizer,
+    scheduler,
     epoch: int,
     criterion,
     device="cpu"
@@ -226,7 +235,8 @@ def _train_epoch(
                 "optimizer_state_dict": optimizer.state_dict(),
                 "loss": loss
             }, f"{experiment_name}.pt")
-
+    if scheduler != None:
+      scheduler.step()
     return loss_history, accuracy_history
 
 
@@ -244,7 +254,6 @@ def _train_batch(data, target, model: Module, optimizer: Optimizer, criterion, d
 
     loss = loss.cpu().detach().numpy()
     accuracy = (predictions == ground_truth).mean()
-
     return loss, accuracy
 
 

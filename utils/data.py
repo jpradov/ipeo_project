@@ -55,8 +55,8 @@ class PlanetBaseDataset(Dataset):
         self.root = data_dir
         self.image_path = os.path.join(self.root, r"images")
         self.mask_path = os.path.join(self.root, r"labels")
-        self.folder_data = os.listdir(self.image_path)
-        self.folder_mask = os.listdir(self.mask_path)
+        self.folder_data = sorted(os.listdir(self.image_path))
+        self.folder_mask = sorted(os.listdir(self.mask_path))
         self.bands = bands
 
     def __getitem__(self, index):
