@@ -69,7 +69,7 @@ def run_training(
     # ===== Model, Optimizer and Criterion =====
     model = model.to(device=device)
     if optimizer == None:
-      optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.functional.cross_entropy
 
     # ===== Train Model =====
@@ -109,7 +109,7 @@ def run_training(
             "precision": precision,
             "recall": recall,
             "f1": f1,
-            "learning rate" : current_lr
+            "learning rate": current_lr
         })
         val_loss_history.append(val_loss)
         val_acc_history.append(val_acc)
@@ -118,7 +118,8 @@ def run_training(
         recall_history.append(recall)
         f1_history.append(f1)
         if early_stopper.early_stop(val_acc):
-            print(f"Early stopped at epoch {epoch} with val loss {val_loss} and val accuracy {val_acc}.")
+            print(
+                f"Early stopped at epoch {epoch} with val loss {val_loss} and val accuracy {val_acc}.")
             break
 
     # TODO - plot all validation data
@@ -126,7 +127,8 @@ def run_training(
     # ===== Plot training curves =====
     n_train = len(train_acc_history)
     t_train = epoch * np.arange(n_train) / n_train
-    t_val = np.arange(1, epoch + 1) #not num_epoch+1 due to possible early stopping.
+    # not num_epoch+1 due to possible early stopping.
+    t_val = np.arange(1, epoch + 1)
     plt.figure()
     plt.plot(t_train, train_acc_history, label="Train")
     plt.plot(t_val, val_acc_history, label="Val")
@@ -157,7 +159,30 @@ def run_training(
             plt.title(f"true={int(points[k][3])} pred={int(points[k][2])}")
             plt.subplot(2, 5, 5 + k + 1)
             plt.imshow(points[-k - 1][0].reshape(28, 28), cmap="gray")
-            plt.title(f"true={int(points[-k-1][3])} pred={int(points[-k-1][2])}")
+            plt.title(
+                f"true={int(points[-k-1][3])} pred={int(points[-k-1][2])}")
+
+    wandb_images = []
+    for data, target in val_dl[:5]:
+        data, _, pred, target = _get_prediction(
+            model=model, device=device, data=data, target=target, criterion=criterion)
+        class_labels = {
+            0: "normal",
+            1: "loss"
+        }
+        image = wandb.Image(data)
+        mask_image = wandb.Image(image, masks={
+            "predictions": {
+                "mask_data": pred,
+                "class_labels": class_labels
+            },
+            "ground_truth": {
+                "mask_data": target,
+                "class_labels": class_labels
+            }
+        })
+        wandb_images.append(mask_image)
+    wandb.log({"example predictions": wandb_images})
 
     return TrainingResult(
         train_loss_history=train_loss_history,
@@ -236,7 +261,7 @@ def _train_epoch(
                 "loss": loss
             }, f"{experiment_name}.pt")
     if scheduler != None:
-      scheduler.step()
+        scheduler.step()
     return loss_history, accuracy_history
 
 
@@ -263,18 +288,23 @@ def _get_predictions(model, device, val_loader, criterion, num=None):
     model.eval()
     points = []
     for data, target in val_loader:
-        data, target = data.to(device), target.to(device)
-        output = model(data)
-        loss = criterion(output, target)
-        pred = output.argmax(dim=1, keepdim=True)
-
-        data = np.split(data.cpu().numpy(), len(data))
-        loss = np.split(loss.cpu().numpy(), len(data))
-        pred = np.split(pred.cpu().numpy(), len(data))
-        target = np.split(target.cpu().numpy(), len(data))
-        points.extend(zip(data, loss, pred, target))
+        point = _get_prediction(model, device, data, target, criterion)
+        points.extend(point)
 
         if num is not None and len(points) > num:
             break
 
     return points
+
+
+def _get_prediction(model, device, data, target, criterion):
+    data, target = data.to(device), target.to(device)
+    output = model(data)
+    loss = criterion(output, target)
+    pred = output.argmax(dim=1, keepdim=True)
+
+    data = np.split(data.cpu().numpy(), len(data))
+    loss = np.split(loss.cpu().numpy(), len(data))
+    pred = np.split(pred.cpu().numpy(), len(data))
+    target = np.split(target.cpu().numpy(), len(data))
+    return zip(data, loss, pred, target)
