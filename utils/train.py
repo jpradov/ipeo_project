@@ -47,7 +47,8 @@ def run_training(
         optimizer=None,
         scheduler=None,
         project_name=None,
-        visualization=False
+        visualization=False,
+        save=False,
 ) -> TrainingResult:
     """`wandb.login()` must be called prior to training"""
     # adapted from CS-433 Machine Learning Exercises
@@ -91,7 +92,8 @@ def run_training(
             optimizer=optimizer,
             scheduler=scheduler,
             epoch=epoch,
-            criterion=criterion
+            criterion=criterion,
+            save=save,
         )
         train_loss_history.extend(train_loss)
         train_acc_history.extend(train_acc)
@@ -205,7 +207,8 @@ def _train_epoch(
     scheduler,
     epoch: int,
     criterion,
-    device="cpu"
+    device="cpu",
+    save=False,
 ) -> tuple[list[float], list[float]]:
     # adapted from CS-433 Machine Learning Exercises
     model.train()
@@ -229,12 +232,13 @@ def _train_epoch(
             print(
                 f"Train Epoch: {epoch}-{batch_idx} batch_loss={loss/len(data):0.2e} batch_acc={accuracy/len(data):0.3f}"
             )
-            torch.save({
-                "epoch": epoch,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "loss": loss
-            }, f"{experiment_name}.pt")
+            if save:
+                torch.save({
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "loss": loss
+                }, f"{experiment_name}.pt")
     if scheduler != None:
       scheduler.step()
     return loss_history, accuracy_history
