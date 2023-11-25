@@ -43,13 +43,12 @@ def normalized_image(image):
 class PlanetBaseDataset(Dataset):
     """Base Dataset Class to load in all images with the requested bands."""
 
-    def __init__(self, data_dir=config.PATH_TO_DATA, bands=[0, 1, 2, 3]):
+    def __init__(self, data_dir=config.PATH_TO_DATA, bands=[0, 1, 2, 3], ndvi: bool=False):
         """
         Args:
             data_dir (str): The root directory where the Planet dataset is stored.
             bands (list(int)) : A list of band indexes to be used.
-            transform (callable, optional): A function/transform to apply to the data samples.
-            target_transform (callable, optional): A function/transform to apply to the target masks.
+            ndvi (bool): whether to reduce red and NRI band to NDVI band
         """
 
         self.root = data_dir
@@ -58,6 +57,7 @@ class PlanetBaseDataset(Dataset):
         self.folder_data = sorted(os.listdir(self.image_path))
         self.folder_mask = sorted(os.listdir(self.mask_path))
         self.bands = bands
+        self.ndvi = ndvi
 
     def __getitem__(self, index):
         sample_path = os.path.join(self.image_path, self.folder_data[index])
@@ -68,8 +68,18 @@ class PlanetBaseDataset(Dataset):
         )
         mask = torch.from_numpy(self.custom_loader(mask_path))
 
-        # permute channels in the required order
+        # permute channels in the required order (C, H, W)
         sample = torch.permute(sample, (2, 0, 1))
+
+        if self.ndvi:
+            # calculate ndvi
+            nir = sample[[3], :, :] # indexing with list keeps channel dimension
+            r = sample[[0], :, :]
+            ndvi_band = (nir - r) / (nir + r)
+
+            # concatenate ndvi band in first channel together with green and blue channels
+            sample = torch.cat((ndvi_band, sample[[1, 2], :, :]), dim=0)
+            
 
         # TODO: decide on normalization of satellite images!
         # min max normalization is difficult given quite a few outliers, standardization suffers from similar problems.
@@ -89,6 +99,8 @@ class PlanetBaseDataset(Dataset):
 
         # sample = (sample - means) / stds
         """
+        # print("Sample Shape: ", sample.shape)
+        # print("Mask Shape: ", mask.shape)
         return sample, mask
 
     def __len__(self):
@@ -148,10 +160,11 @@ def create_dataloaders(
     batch_transforms: bool = None,
     num_workers: int = 0,
     transforms=True,
+    ndvi=False,
 ):
     """Function to create individual dataloaders for test, train and val subset, including data augmentations"""
     # Create base datasets
-    dataset = PlanetBaseDataset(data_dir, bands)
+    dataset = PlanetBaseDataset(data_dir, bands, ndvi=ndvi)
 
     # Load predefined splits
     splits = pd.read_csv(os.path.join(data_dir, "data_split.csv"))
@@ -164,6 +177,13 @@ def create_dataloaders(
     means = torch.tensor([265.7371, 445.2234, 393.7881, 2773.2734])
     stds = torch.tensor([91.8786, 110.0122, 191.7516, 709.2327])
     means, stds = means[bands], stds[bands]
+
+    # replace first channel with ndvi mean and std and remove the NIR band
+    if ndvi:
+        means = means[[0, 1, 2]]
+        stds = stds[[0, 1, 2]]
+        means[0] = 0.8082
+        stds[0] = 1.0345e-01
 
     # define transforms
     train_transforms = K.container.AugmentationSequential(
