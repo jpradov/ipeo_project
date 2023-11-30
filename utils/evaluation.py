@@ -17,31 +17,44 @@ from sklearn.metrics import accuracy_score, jaccard_score, precision_score, reca
 
 @torch.no_grad()
 def evaluate(model, device, val_loader, criterion):
-    # adapted from CS-433 Machine Learning Exercises
+    """ Function to evaluate current model given a data_loader.
+    adapted from CS-433 Machine Learning Exercises 
+    """
+    
     model.eval()
     test_loss = 0
-    correct = 0
+
     target_tot = []
     pred_tot = []
+
     for data, target in val_loader:
         data, target = data.to(device), target.to(device)
         output = model(data)
-        pred = output.argmax(
-            dim=1, keepdim=True
-        )  # Assuming this is a pixel-wise classification
 
-        target_tot.extend(target.view(-1).cpu().numpy())
-        pred_tot.extend(pred.view(-1).cpu().numpy())
         test_loss += criterion(output, target).item() * len(data)
+        pred = output.argmax(dim=1, keepdim=True)
 
+        # append minibatch to totals
+        target_tot.append(target)
+        pred_tot.append(pred)
+        
+    # concatenate the individual batches
+    target_tot = torch.cat(target_tot, dim=0)
+    pred_tot = torch.cat(target_tot, dim=0)
+
+    # get final loss across full epoch
     test_loss /= len(val_loader.torch_loader.dataset)
 
-    # Calculate metrics using sklearn
-    accuracy = accuracy_score(target_tot, pred_tot)   
-    jaccard = jaccard_score(target_tot, pred_tot, average='macro') # equivalent to IOU
-    precision = precision_score(target_tot, pred_tot, average='macro')
-    recall = recall_score(target_tot, pred_tot, average='macro')
-    f1 = f1_score(target_tot, pred_tot, average='macro') # equivalent to Dice index
+    # Calculate metrics (on GPU if needed)
+    true_pos = ((target_tot == 1) & (pred_tot == 1)).sum().item()
+    false_neg = ((target_tot == 1) & (pred_tot == 0)).sum().item()
+    false_pos = ((target_tot == 0) & (pred_tot == 1)).sum().item()
+
+    accuracy = (target_tot == pred_tot).mean().item()
+    precision = true_pos / (true_pos + false_pos) if (true_pos + false_pos) > 0 else 0
+    recall = true_pos / (true_pos + false_neg) if (true_pos + false_pos) > 0 else 0
+    f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) else 0
+    jaccard = true_pos / (true_pos + false_neg + false_pos) if (true_pos + false_neg + false_pos) else 0
 
     return test_loss, accuracy, jaccard, precision, recall, f1
 
