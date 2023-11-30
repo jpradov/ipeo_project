@@ -6,7 +6,7 @@ import torch
 from torch.nn import Module
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
-from tqdm import tqdm
+from tqdm.notebook import tqdm  # as we run the functions in notebooks only
 from data import create_dataloaders
 from evaluation import evaluate
 import wandb
@@ -36,23 +36,27 @@ class TrainingResult():
 
 def run_training(
         experiment_name: str,
-        data_dir: str,
         model: Module,
         num_epochs: int,
+        optimizer,
+        criterion,
+        train_dl,
+        val_dl,
+        scheduler,
         lr: float,
         batch_size: int,
-        num_workers=2,
-        bands=[0, 1, 2, 3],
-        device="cpu",
-        optimizer=None,
-        scheduler=None,
+        device="cuda:0",
         project_name=None,
-        visualization=False,
         save=False,
+        early_stop_patience=None,
 ) -> TrainingResult:
+    
     """`wandb.login()` must be called prior to training"""
     # adapted from CS-433 Machine Learning Exercises
-    # ===== Weights & Biases setup =====
+    
+    # ===== Setup =====
+
+    # initialise weights and biases
     wandb.init(
         name=experiment_name,
         entity="ipeo_project",
@@ -63,18 +67,18 @@ def run_training(
             "num_epochs": num_epochs
         }
     )
-    # ===== Data Loading =====
-    train_dl, val_dl, test_dl = create_dataloaders(
-        data_dir=data_dir, batch_size=batch_size, bands=bands, num_workers=num_workers)
 
-    # ===== Model, Optimizer and Criterion =====
+    # Setup
     model = model.to(device=device)
-    if optimizer == None:
-      optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = torch.nn.functional.cross_entropy
 
-    # ===== Train Model =====
-    early_stopper = _EarlyStopper(patience=num_epochs)
+    # if early stop patience is not set, we do not early stop, 
+    # i.e., we simply set early stop patience to num_epochs
+    if early_stop_patience == None:
+        early_stop_patience = num_epochs
+    
+    early_stopper = _EarlyStopper(patience=early_stop_patience)
+
+    # initialise lists to observe training
     train_loss_history = []
     train_acc_history = []
     val_loss_history = []
@@ -83,6 +87,8 @@ def run_training(
     precision_history = []
     recall_history = []
     f1_history = []
+
+    # ===== Train Model =====
     for epoch in range(1, num_epochs + 1):
         train_loss, train_acc = _train_epoch(
             experiment_name=experiment_name,
@@ -95,15 +101,21 @@ def run_training(
             criterion=criterion,
             save=save,
         )
+
+        # extend training history
         train_loss_history.extend(train_loss)
         train_acc_history.extend(train_acc)
-        current_lr = optimizer.param_groups[0]['lr']
+
+        # calculate validation progress
         val_loss, val_acc, iou, precision, recall, f1 = evaluate(
             model=model,
             device=device,
             val_loader=val_dl,
             criterion=criterion
         )
+
+        # log to wandb
+        current_lr = optimizer.param_groups[0]['lr']
         wandb.log({
             "validation_loss": val_loss,
             "validation_accuracy": val_acc,
@@ -113,22 +125,23 @@ def run_training(
             "f1": f1,
             "learning rate" : current_lr
         })
+
+        # keep track of all training and validation statistics
         val_loss_history.append(val_loss)
         val_acc_history.append(val_acc)
         iou_history.append(iou)
         precision_history.append(precision)
         recall_history.append(recall)
         f1_history.append(f1)
+
         if early_stopper.early_stop(val_acc):
             print(f"Early stopped at epoch {epoch} with val loss {val_loss} and val accuracy {val_acc}.")
             break
 
-    # TODO - plot all validation data
-
-    # ===== Plot training curves =====
+    # ===== Plot training and validation curves =====
     n_train = len(train_acc_history)
     t_train = epoch * np.arange(n_train) / n_train
-    t_val = np.arange(1, epoch + 1) #not num_epoch+1 due to possible early stopping.
+    t_val = np.arange(1, epoch + 1)
     plt.figure()
     plt.plot(t_train, train_acc_history, label="Train")
     plt.plot(t_val, val_acc_history, label="Val")
@@ -143,23 +156,8 @@ def run_training(
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
 
-    # ===== Plot low/high loss predictions on validation set =====
-    points = _get_predictions(
-        model=model,
-        device=device,
-        val_loader=val_dl,
-        criterion=partial(torch.nn.functional.cross_entropy, reduction="none"),
-    )
-    if visualization:
-        points.sort(key=lambda x: x[1])
-        plt.figure(figsize=(15, 6))
-        for k in range(5):
-            plt.subplot(2, 5, k + 1)
-            plt.imshow(points[k][0].reshape(28, 28), cmap="gray")
-            plt.title(f"true={int(points[k][3])} pred={int(points[k][2])}")
-            plt.subplot(2, 5, 5 + k + 1)
-            plt.imshow(points[-k - 1][0].reshape(28, 28), cmap="gray")
-            plt.title(f"true={int(points[-k-1][3])} pred={int(points[-k-1][2])}")
+    # close wandb run-session
+    wandb.finish()
 
     return TrainingResult(
         train_loss_history=train_loss_history,
@@ -207,15 +205,18 @@ def _train_epoch(
     scheduler,
     epoch: int,
     criterion,
-    device="cpu",
+    device="cuda:0",
     save=False,
 ) -> tuple[list[float], list[float]]:
     # adapted from CS-433 Machine Learning Exercises
+    
     model.train()
     loss_history = []
     accuracy_history = []
-    pbar = tqdm(total=100)
-    for batch_idx, (data, target) in enumerate(train_loader):
+
+    num_minibatches = len(train_loader.torch_loader) # returns the number of batches in the loader
+
+    for batch_idx, (data, target) in tqdm(enumerate(train_loader), total=num_minibatches):
         loss, accuracy = _train_batch(data=data, target=target, model=model, optimizer=optimizer,
                                       criterion=criterion, device=device)
 
@@ -228,9 +229,8 @@ def _train_epoch(
         })
 
         if batch_idx % (len(train_loader.torch_loader.dataset) // len(data) // 10) == 0:
-            pbar.update(10)
             print(
-                f"Train Epoch: {epoch}-{batch_idx} batch_loss={loss/len(data):0.2e} batch_acc={accuracy/len(data):0.3f}"
+                f"Train Epoch: {epoch}-{batch_idx} batch_loss={loss:0.2e} batch_acc={accuracy:0.3f}"
             )
             if save:
                 torch.save({
@@ -244,20 +244,25 @@ def _train_epoch(
     return loss_history, accuracy_history
 
 
-def _train_batch(data, target, model: Module, optimizer: Optimizer, criterion, device="cpu") -> tuple[float, float]:
+def _train_batch(data, target, model: Module, optimizer: Optimizer, criterion, device="cuda:0") -> tuple[float, float]:
     data, target = data.to(device=device), target.to(device=device)
 
-    output = model.forward(data)
+    # feed image through model and calculate loss
+    output = model(data)
     loss = criterion(output, target)
+
+    # gradient step
     loss.backward()
     optimizer.step()
     optimizer.zero_grad()
 
-    predictions = output.argmax(1).cpu().detach().numpy()
-    ground_truth = target.cpu().detach().numpy()
+    # get class predictions
+    predictions = output.argmax(1)
 
-    loss = loss.cpu().detach().numpy()
-    accuracy = (predictions == ground_truth).mean()
+    # calculate train metrics
+    loss = loss.item()
+    accuracy = torch.mean((predictions == target).float()).item()
+
     return loss, accuracy
 
 
