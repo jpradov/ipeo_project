@@ -80,27 +80,6 @@ class PlanetBaseDataset(Dataset):
             # concatenate ndvi band in first channel together with green and blue channels
             sample = torch.cat((ndvi_band, sample[[1, 2], :, :]), dim=0)
             
-
-        # TODO: decide on normalization of satellite images!
-        # min max normalization is difficult given quite a few outliers, standardization suffers from similar problems.
-        """ 
-        # mins, max of training raw images.
-        mins = torch.tensor([ 0., 21.,  6., 77.])
-        maxs = torch.tensor([ 4433.,  5023.,  8230., 10000.])
-
-        # access relevant channels
-        mins, maxs = mins[self.bands], maxs[self.bands]
-
-        # normalization to 0-1 range 
-        # sample = (sample - mins) / (maxs - mins)
-        means = torch.tensor([ 265.7371,  445.2234,  393.7881, 2773.2734])
-        stds = torch.tensor([ 91.8786, 110.0122, 191.7516, 709.2327])
-        means, stds = means[self.bands], stds[self.bands]
-
-        # sample = (sample - means) / stds
-        """
-        # print("Sample Shape: ", sample.shape)
-        # print("Mask Shape: ", mask.shape)
         return sample, mask
 
     def __len__(self):
@@ -247,62 +226,3 @@ def create_dataloaders(
 
 
     return train_dataloader, val_dataloader, test_dataloader
-
-
-# Old way of just loading all the images - left in as reference
-class PlanetDataset(Dataset):
-    def __init__(
-        self,
-        data_dir=config.PATH_TO_DATA,
-        bands=[0, 1, 2, 3],
-        transform=None,
-        target_transform=None,
-    ):
-        """
-        Args:
-            data_dir (str): The root directory where the Planet dataset is stored.
-            bands (list(int)) : A list of band indexes to be used.
-            transform (callable, optional): A function/transform to apply to the data samples.
-            target_transform (callable, optional): A function/transform to apply to the target masks.
-        """
-
-        self.root = data_dir
-        self.image_path = os.path.join(self.root, r"images")
-        self.mask_path = os.path.join(self.root, r"labels")
-        self.folder_data = os.listdir(self.image_path)
-        self.folder_mask = os.listdir(self.mask_path)
-        self.bands = bands
-        self.transform = transform
-        self.target_transform = target_transform
-        # Map that converts image names to indexes in the dataset
-        self.id2index = {
-            int(image_id[:-4]): i for i, image_id in enumerate(self.folder_data)
-        }
-
-    def __getitem__(self, index):
-        sample_path = os.path.join(self.image_path, self.folder_data[index])
-        mask_path = os.path.join(self.mask_path, self.folder_mask[index])
-
-        sample = torch.from_numpy(
-            self.custom_loader(path=sample_path)[:, :, self.bands]
-        )
-        sample = torch.permute(sample, (2, 0, 1))
-
-        mask = torch.from_numpy(self.custom_loader(mask_path))
-
-        if self.transform is not None:
-            sample = self.transform(sample)
-
-        if self.target_transform is not None:
-            mask = self.target_transform(mask)
-
-        return sample, mask
-
-    def __len__(self):
-        return len(self.folder_data)
-
-    def custom_loader(self, path):
-        return imread(path).astype(np.float32)
-
-    def __str__(self):
-        return f"PlanetDataset(root={self.root}, num_samples={len(self)}, transform={self.transform}, target_transform={self.target_transform})"
