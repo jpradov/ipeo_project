@@ -43,11 +43,11 @@ def normalized_image(image):
 class PlanetBaseDataset(Dataset):
     """Base Dataset Class to load in all images with the requested bands."""
 
-    def __init__(self, data_dir=config.PATH_TO_DATA, bands=[0, 1, 2, 3], ndvi: bool=False):
+    def __init__(self, data_dir=config.PATH_TO_DATA, bands=[0, 1, 2], ndvi: bool=False):
         """
         Args:
             data_dir (str): The root directory where the Planet dataset is stored.
-            bands (list(int)) : A list of band indexes to be used.
+            bands (list(int)) : A list of band indexes to be used corresponding to R, G, B, NIR, NDVI, defaults to RGB image
             ndvi (bool): whether to reduce red and NRI band to NDVI band
         """
 
@@ -60,27 +60,38 @@ class PlanetBaseDataset(Dataset):
         self.ndvi = ndvi
 
     def __getitem__(self, index):
+
+        # define sample and mask paths
         sample_path = os.path.join(self.image_path, self.folder_data[index])
         mask_path = os.path.join(self.mask_path, self.folder_mask[index])
 
-        sample = torch.from_numpy(
-            self.custom_loader(path=sample_path)[:, :, self.bands]
-        )
-        mask = torch.from_numpy(self.custom_loader(mask_path))
-
+        # load sample first
+        sample = torch.from_numpy(self.custom_loader(path=sample_path))
+        
         # permute channels in the required order (C, H, W)
         sample = torch.permute(sample, (2, 0, 1))
+        
+        # calculate NDVI as fifth band
+        sample = self.add_ndvi(sample)
 
-        if self.ndvi:
-            # calculate ndvi
-            nir = sample[[3], :, :] # indexing with list keeps channel dimension
-            r = sample[[0], :, :]
-            ndvi_band = (nir - r) / (nir + r)
+        # select requested bands
+        sample = sample[:, :, self.bands]
 
-            # concatenate ndvi band in first channel together with green and blue channels
-            sample = torch.cat((ndvi_band, sample[[1, 2], :, :]), dim=0)
-            
+        # load mask
+        mask = torch.from_numpy(self.custom_loader(mask_path))
+
         return sample, mask
+    
+    def add_ndvi(self, sample):
+        
+        # calculate ndvi
+        nir = sample[[3], :, :] # indexing with list keeps channel dimension
+        r = sample[[0], :, :]
+        ndvi_band = (nir - r) / (nir + r)
+          
+        # add NDVI as the fifth channel
+        sample = torch.cat((sample, ndvi_band), dim=0)
+        return sample
 
     def __len__(self):
         return len(self.folder_data)
@@ -153,16 +164,10 @@ def create_dataloaders(
     test_indices = splits[splits["split"] == "Test"].index.values
     val_indices = splits[splits["split"] == "Validation"].index.values
 
-    means = torch.tensor([265.7371, 445.2234, 393.7881, 2773.2734])
-    stds = torch.tensor([91.8786, 110.0122, 191.7516, 709.2327])
+    # training means and stds for R, G, B, NIR, and NDVI bands
+    means = torch.tensor([265.7371, 445.2234, 393.7881, 2773.2734, 0.8082])
+    stds = torch.tensor([91.8786, 110.0122, 191.7516, 709.2327, 1.0345e-01])
     means, stds = means[bands], stds[bands]
-
-    # replace first channel with ndvi mean and std and remove the NIR band
-    if ndvi:
-        means = means[[0, 1, 2]]
-        stds = stds[[0, 1, 2]]
-        means[0] = 0.8082
-        stds[0] = 1.0345e-01
 
     # define transforms
     train_transforms = K.container.AugmentationSequential(
@@ -170,10 +175,7 @@ def create_dataloaders(
         K.RandomResizedCrop(size=(224, 224), p=0.5),
         K.RandomHorizontalFlip(p=0.5),
         K.RandomVerticalFlip(p=0.5),
-        K.RandomBoxBlur(
-            kernel_size=(20, 20), border_type="reflect", normalized=True, p=0.2
-        ),  # Note that the randomblur is applied to the image but no the mask!
-        # K.RandomGrayscale(p=0.2), # only works when we have 3 input channels
+        K.RandomBoxBlur(kernel_size=(20, 20), border_type="reflect", normalized=True, p=0.2),
         K.Normalize(mean=means, std=stds),
         same_on_batch=batch_transforms,
         data_keys=["image", "mask"],
@@ -186,6 +188,7 @@ def create_dataloaders(
         data_keys=["image", "mask"],
     )
 
+    # set transforms to None if requested (e.g., to calculate training means and stds)
     if not transforms:
         train_transforms = None
         test_transforms = None
