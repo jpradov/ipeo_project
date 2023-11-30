@@ -41,9 +41,16 @@ def normalized_image(image):
 
 
 class PlanetBaseDataset(Dataset):
-    """Base Dataset Class to load in all images with the requested bands."""
+    """Base Dataset Class to load in all images with the requested bands.
+    Simply request the bands you wish to load in any order via the list index. 
+    
+    The ordering is as follows:
+    Red (index 0), Green (index 1), Blue (index 2), NIR (index 3), NDVI (index 4).
+    Example: bands=[4, 1, 2] loads an image with channels [NDVI, Green, Blue]
+    
+    """
 
-    def __init__(self, data_dir=config.PATH_TO_DATA, bands=[0, 1, 2], ndvi: bool=False):
+    def __init__(self, data_dir=config.PATH_TO_DATA, bands=[0, 1, 2]):
         """
         Args:
             data_dir (str): The root directory where the Planet dataset is stored.
@@ -57,7 +64,6 @@ class PlanetBaseDataset(Dataset):
         self.folder_data = sorted(os.listdir(self.image_path))
         self.folder_mask = sorted(os.listdir(self.mask_path))
         self.bands = bands
-        self.ndvi = ndvi
 
     def __getitem__(self, index):
 
