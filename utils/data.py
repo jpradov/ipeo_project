@@ -156,11 +156,10 @@ def create_dataloaders(
     batch_transforms: bool = None,
     num_workers: int = 0,
     transforms=True,
-    ndvi=False,
 ):
     """Function to create individual dataloaders for test, train and val subset, including data augmentations"""
     # Create base datasets
-    dataset = PlanetBaseDataset(data_dir, bands, ndvi=ndvi)
+    dataset = PlanetBaseDataset(data_dir, bands)
 
     # Load predefined splits
     splits = pd.read_csv(os.path.join(data_dir, "data_split.csv"))
