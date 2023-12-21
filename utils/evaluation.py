@@ -106,4 +106,4 @@ def visualise_batch_predictions(batch_image, batch_mask, batch_prediction, resca
                                     ])
             image = invTrans(image)
 
-        show_overlay(image, mask, prediction, rescale=rescale)
+        show_overlay(image, mask, prediction)
