@@ -29,7 +29,6 @@ def evaluate(model, device, val_loader, criterion):
     true_neg = 0
     false_neg = 0
     false_pos = 0
-    total_pixels = 0
 
     for data, target in val_loader:
         data, target = data.to(device), target.to(device)
@@ -42,13 +41,12 @@ def evaluate(model, device, val_loader, criterion):
         true_neg += ((target == 0) & (pred == 0)).sum().item()
         false_neg += ((target == 1) & (pred == 0)).sum().item()
         false_pos += ((target == 0) & (pred == 1)).sum().item()
-        total_pixels += target.numel()
-    
+
     # get final loss across full epoch
     test_loss /= len(val_loader.torch_loader.dataset)
 
     # Calculate metrics (on GPU if needed)
-    accuracy = (true_pos + true_neg) / total_pixels
+    accuracy = (true_pos + true_neg) / (true_pos + true_neg + false_pos + false_neg)
     precision = true_pos / (true_pos + false_pos) if (true_pos + false_pos) > 0 else 0
     recall = true_pos / (true_pos + false_neg) if (true_pos + false_pos) > 0 else 0
     f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) else 0
