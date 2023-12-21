@@ -37,10 +37,10 @@ def evaluate(model, device, val_loader, criterion):
         # append minibatch to totals
         target_tot.append(target)
         pred_tot.append(pred)
-        
+    
     # concatenate the individual batches
     target_tot = torch.cat(target_tot, dim=0)
-    pred_tot = torch.cat(target_tot, dim=0)
+    pred_tot = torch.cat(pred_tot, dim=0)
 
     # get final loss across full epoch
     test_loss /= len(val_loader.torch_loader.dataset)
