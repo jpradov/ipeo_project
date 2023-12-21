@@ -13,7 +13,7 @@ from utils.data import normalized_image
 
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, jaccard_score, precision_score, recall_score, f1_score
+
 
 @torch.no_grad()
 def evaluate(model, device, val_loader, criterion):
@@ -22,10 +22,14 @@ def evaluate(model, device, val_loader, criterion):
     """
     
     model.eval()
-    test_loss = 0
 
-    target_tot = []
-    pred_tot = []
+    # initialise counters
+    test_loss = 0
+    true_pos = 0
+    true_neg = 0
+    false_neg = 0
+    false_pos = 0
+    total_pixels = 0
 
     for data, target in val_loader:
         data, target = data.to(device), target.to(device)
@@ -34,23 +38,17 @@ def evaluate(model, device, val_loader, criterion):
         test_loss += criterion(output, target).item() * len(data)
         pred = output.argmax(dim=1, keepdim=True)
 
-        # append minibatch to totals
-        target_tot.append(target)
-        pred_tot.append(pred)
+        true_pos += ((target == 1) & (pred == 1)).sum().item()
+        true_neg += ((target == 0) & (pred == 0)).sum().item()
+        false_neg += ((target == 1) & (pred == 0)).sum().item()
+        false_pos += ((target == 0) & (pred == 1)).sum().item()
+        total_pixels += target.numel()
     
-    # concatenate the individual batches
-    target_tot = torch.cat(target_tot, dim=0)
-    pred_tot = torch.cat(pred_tot, dim=0)
-
     # get final loss across full epoch
     test_loss /= len(val_loader.torch_loader.dataset)
 
     # Calculate metrics (on GPU if needed)
-    true_pos = ((target_tot == 1) & (pred_tot == 1)).sum().item()
-    false_neg = ((target_tot == 1) & (pred_tot == 0)).sum().item()
-    false_pos = ((target_tot == 0) & (pred_tot == 1)).sum().item()
-
-    accuracy = (target_tot == pred_tot).mean().item()
+    accuracy = (true_pos + true_neg) / total_pixels
     precision = true_pos / (true_pos + false_pos) if (true_pos + false_pos) > 0 else 0
     recall = true_pos / (true_pos + false_neg) if (true_pos + false_pos) > 0 else 0
     f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) else 0
