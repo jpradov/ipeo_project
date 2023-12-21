@@ -81,7 +81,7 @@ class PlanetBaseDataset(Dataset):
         sample = self.add_ndvi(sample)
 
         # select requested bands
-        sample = sample[:, :, self.bands]
+        sample = sample[self.bands, :, :]
 
         # load mask
         mask = torch.from_numpy(self.custom_loader(mask_path))
