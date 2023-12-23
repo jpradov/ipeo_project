@@ -35,7 +35,7 @@ def evaluate(model, device, val_loader, criterion):
         output = model(data)
 
         test_loss += criterion(output, target).item() * len(data)
-        pred = output.argmax(dim=1, keepdim=True)
+        pred = output.argmax(dim=1)
 
         true_pos += ((target == 1) & (pred == 1)).sum().item()
         true_neg += ((target == 0) & (pred == 0)).sum().item()
@@ -80,9 +80,7 @@ def visualise_batch_predictions(batch_image, batch_mask, batch_prediction, resca
     batch_size = batch_image.shape[0]
     
     print("Visualsing {} examples".format(batch_size))
-
-    batch_prediction = batch_prediction.sigmoid() > 0.5 # take sigmoid and threshold at 0.5
-    
+   
     # constants to rescale image
     means = -1 * torch.tensor([265.7371, 445.2234, 393.7881, 2773.2734, 0.8082])
     stds = 1 / torch.tensor([91.8786, 110.0122, 191.7516, 709.2327, 1.0345e-01])
@@ -98,6 +96,7 @@ def visualise_batch_predictions(batch_image, batch_mask, batch_prediction, resca
         mask = batch_mask[index, :, :, :]
         prediction = batch_prediction[index, :, :, :]
         
+        # revert normalization
         if rescale:
             invTrans = transforms.Compose([transforms.Normalize(mean = temp1,
                                                             std = stds),
@@ -106,4 +105,8 @@ def visualise_batch_predictions(batch_image, batch_mask, batch_prediction, resca
                                     ])
             image = invTrans(image)
 
+        # grab first three channels of image for plotting
+        image = image[:3, :, :]
+
+        # plot overlay
         show_overlay(image, mask, prediction)

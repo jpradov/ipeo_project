@@ -55,7 +55,6 @@ class PlanetBaseDataset(Dataset):
         Args:
             data_dir (str): The root directory where the Planet dataset is stored.
             bands (list(int)) : A list of band indexes to be used corresponding to R, G, B, NIR, NDVI, defaults to RGB image
-            ndvi (bool): whether to reduce red and NRI band to NDVI band
         """
 
         self.root = data_dir
