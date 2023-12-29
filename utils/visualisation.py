@@ -2,13 +2,16 @@
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
+
 
 from utils.data import normalized_image
 
 
 def visualise_image(image, label):
     """Function to show true color, false color and segmentation mask of an image."""
-
+    label = label.unsqueeze(0)
+    image, label = torch.permute(image, (1, 2, 0)).numpy(), torch.permute(label, (1, 2, 0)).numpy()
     normalized = normalized_image(image)
 
     fig, axes = plt.subplots(
@@ -50,6 +53,7 @@ def visualise_image_3_channels(image, label):
 
 def plot_band_distribution(image):
     fig, axes = plt.subplots(1, 4, sharex=False, sharey=True, figsize=(14, 4))
+    image = torch.permute(image, (1, 2, 0))
     for k in range(image.shape[2]):
         band = image[:, :, k].flatten()
         sns.histplot(band, ax=axes[k], kde=True)
