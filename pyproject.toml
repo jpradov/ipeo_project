@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "segment-deforestation"
+authors = [
+  { name = "jpradov", email = "joao.pradovieira@epfl.ch" },
+  { name = "arrangabriel", email = "arran.gabriel@epfl.ch" },
+  { name = "LebronMok", email = "mehdi.serraj@epfl.ch" },
+  { name = "lsbicego", email = "luca.sbicego@icloud.com" },
+]
+description = "Repository for the Image Processing for Earth Observation Deep Learning Challenge"
+version = "0.0.1"
+readme = "README.md"
+requires-python = ">=3.9"
+
+[project.urls]
+"Homepage" = "https://github.com/jpradov/ipeo_project"
+
+[tool.setuptools]
+packages = ["models", "utils", "config"]
