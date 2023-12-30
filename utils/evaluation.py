@@ -79,7 +79,7 @@ def show_overlay(image, mask, prediction):
 def visualise_batch_predictions(batch_image, batch_mask, batch_prediction, rescale=False, bands=[0, 1, 2]):
     batch_size = batch_image.shape[0]
     
-    print("Visualsing {} examples".format(batch_size))
+    print("Visualizing {} examples".format(batch_size))
    
     # constants to rescale image
     means = -1 * torch.tensor([265.7371, 445.2234, 393.7881, 2773.2734, 0.8082])
