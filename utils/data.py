@@ -10,7 +10,7 @@ from skimage import exposure
 from skimage.io import imread
 from torch.utils.data import DataLoader, Dataset, Subset
 
-import config
+from config import config
 
 
 def normalized_image(image):
