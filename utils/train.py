@@ -5,7 +5,7 @@ from torch.nn import Module
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
 from tqdm.notebook import tqdm  # as we run the functions in notebooks only
-from evaluation import evaluate
+from utils.evaluation import evaluate
 import wandb
 
 

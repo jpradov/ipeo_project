@@ -10,3 +10,4 @@ torchvision==0.16.0
 wandb==0.15.12
 imagecodecs==2023.9.18
 tqdm==4.66.1
+ipywidgets==8.1.1
