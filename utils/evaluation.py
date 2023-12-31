@@ -55,6 +55,9 @@ def evaluate(model, device, val_loader, criterion):
     return test_loss, accuracy, jaccard, precision, recall, f1
 
 def show_overlay(image, mask, prediction):
+    """ 
+    Function to overlay a prediction and ground truth mask over image and display figure
+    """
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 12))
 
     # reorder images to (H, W, C) and normalize image for better plotting
@@ -77,8 +80,18 @@ def show_overlay(image, mask, prediction):
     return
 
 def visualise_batch_predictions(batch_image, batch_mask, batch_prediction, rescale=False, bands=[0, 1, 2]):
+    """ 
+    Function taking in image batch, mask batch and corresponding predictions and plots the overlay.
+
+    batch_image (torch.tensor): tensor of image
+    batch_mask (torch.tensor): tensor of mask
+    batch_predictions (torch.tensor): tensor of predictions
+    rescale (bool): set to True to undo any normalization done by the data loaders for better plotting.
+    bands list(int): list of the inputs bands present in the image
+    """
+
+    # extract number of images
     batch_size = batch_image.shape[0]
-    
     print("Visualizing {} examples".format(batch_size))
    
     # constants to rescale image

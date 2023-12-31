@@ -1,5 +1,3 @@
-from functools import partial
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -7,7 +5,6 @@ from torch.nn import Module
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
 from tqdm.notebook import tqdm  # as we run the functions in notebooks only
-from data import create_dataloaders
 from evaluation import evaluate
 import wandb
 
@@ -50,6 +47,7 @@ def run_training(
         save=False,
         early_stop_patience=None,
 ) -> TrainingResult:
+    """Function to run the full training of a model over given epoch and logging progress to wandb."""
     
     """`wandb.login()` must be called prior to training"""
     # adapted from CS-433 Machine Learning Exercises
@@ -208,6 +206,7 @@ def _train_epoch(
     device="cuda:0",
     save=False,
 ) -> tuple[list[float], list[float]]:
+    """Function handling training of one epoch."""
     # adapted from CS-433 Machine Learning Exercises
     
     model.train()
@@ -245,6 +244,8 @@ def _train_epoch(
 
 
 def _train_batch(data, target, model: Module, optimizer: Optimizer, criterion, device="cuda:0") -> tuple[float, float]:
+    """Function to perform forward and backward pass for a given training batch. """
+
     data, target = data.to(device=device), target.to(device=device)
 
     # feed image through model and calculate loss
@@ -265,25 +266,3 @@ def _train_batch(data, target, model: Module, optimizer: Optimizer, criterion, d
 
     return loss, accuracy
 
-
-@torch.no_grad()
-def _get_predictions(model, device, val_loader, criterion, num=None):
-    # adapted from CS-433 Machine Learning Exercises
-    model.eval()
-    points = []
-    for data, target in val_loader:
-        data, target = data.to(device), target.to(device)
-        output = model(data)
-        loss = criterion(output, target)
-        pred = output.argmax(dim=1, keepdim=True)
-
-        data = np.split(data.cpu().numpy(), len(data))
-        loss = np.split(loss.cpu().numpy(), len(data))
-        pred = np.split(pred.cpu().numpy(), len(data))
-        target = np.split(target.cpu().numpy(), len(data))
-        points.extend(zip(data, loss, pred, target))
-
-        if num is not None and len(points) > num:
-            break
-
-    return points

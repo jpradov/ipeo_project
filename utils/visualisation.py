@@ -52,6 +52,7 @@ def visualise_image_3_channels(image, label):
 
 
 def plot_band_distribution(image):
+    """Function to plot the distribution of pixel values across all bands."""
     fig, axes = plt.subplots(1, 4, sharex=False, sharey=True, figsize=(14, 4))
     image = torch.permute(image, (1, 2, 0))
     for k in range(image.shape[2]):
