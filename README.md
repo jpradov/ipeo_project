@@ -23,9 +23,9 @@ To do so, you must download the final model weights via [this Google Drive Link]
 
 Two examples predictions and their respective ground truth labels are shown below:
 
-![Example 1](plots/prediction_3.png)
-![Example 2](plots/prediction_2.png)
-![Example 2](plots/prediction_4.png)
+![Example 1](images/prediction_3.png)
+![Example 2](images/prediction_2.png)
+![Example 2](images/prediction_4.png)
 
 ## Dataset
 
@@ -33,8 +33,8 @@ The dataset is made available through the [`Norway's International Climate and F
 
 Two examples of the data can be seen below:
 
-![Example 1](plots/forest_patch.png)
-![Example 2](plots/forest_road.png)
+![Example 1](images/forest_patch.png)
+![Example 2](images/forest_road.png)
 
 ## File Structure
 
