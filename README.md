@@ -1,5 +1,5 @@
 # Segment2Reforest
-Project for the class on Image Processing for Earth Obsercation - EPFL, 2023
+Project for the class on Image Processing for Earth Observation - EPFL, 2023
 
 In this project, we replicate Deforestation Alerts from the Global Forest Watch Integrated Alert System with various deep learning methods with data covering the Amazon Rainforest. In doing so, we explore the impact of working with an additional NIR channel besides the optical R-G-B bands. Our best final model leverages the MSNet architecture with all four input bands (R-G-B-NIR) and reaches an F1-Score of 0.9107 and an Accuracy of 0.9164.
 
